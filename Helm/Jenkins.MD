@@ -1,9 +1,11 @@
 [Source](https://artifacthub.io/packages/helm/jenkinsci/jenkins)
 
+**Works locally**
+
 # Install
-`helm repo add jenkins https://charts.jenkins.io`
-`helm repo update`
-`helm install jenkins-k8s jenkins/jenkins [flags]`
+- `helm repo add jenkins https://charts.jenkins.io`
+- `helm repo update`
+- `helm install jenkins-k8s jenkins/jenkins [flags]`
 
 ## Config
 
@@ -16,9 +18,9 @@
 4. Configure security realm and authorization strategy
 5. Use Jenkins Configuration as Code by specifying configScripts in your values.yaml file, see [documentation](http:///configuration-as-code) and [examples](https://github.com/jenkinsci/configuration-as-code-plugin/tree/master/demos)
 
-## Check
+## Check deployment
 
-helm ls
+- `helm ls`
 
 # Uninstall
-helm delete jenkins-k8s
+-`helm delete jenkins-k8s`
