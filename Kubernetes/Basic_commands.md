@@ -1,0 +1,1 @@
+kubectl exec --tty --stdin <pod_name> -- /bin/bash
