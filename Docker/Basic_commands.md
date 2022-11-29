@@ -9,6 +9,7 @@ docker images
 docker container run --name <give_a_name_of_container> -ti <image_name>
 docker container run -ti alpine-with-vim /bin/sh
 docker run -d busybox:1.24 sleep 100
+docker run -d postgres sleep 100
 
 # Connect to container
 docker ps -a
