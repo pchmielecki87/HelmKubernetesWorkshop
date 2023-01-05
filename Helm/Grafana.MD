@@ -19,6 +19,8 @@
 ## Check deployment
 
 - `helm ls`
+- check application on `localhost:3000`
+- username: `admin`
 
 # Uninstall
 - `helm delete grafana-k8s`

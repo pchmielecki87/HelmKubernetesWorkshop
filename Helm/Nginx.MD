@@ -14,6 +14,8 @@
 ## Check deployment
 
 - `helm ls`
+- watch the status with `kubectl get svc --namespace default -w simplenginx`
+- use `localhost:80` to view nginx
 
 # Uninstall
 - `helm delete simplenginx`
