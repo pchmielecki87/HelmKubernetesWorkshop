@@ -5,7 +5,7 @@
 # Install
 - `helm repo add jenkins https://charts.jenkins.io`
 - `helm repo update`
-- `helm install jenkins-k8s jenkins/jenkins [flags]`
+- `helm install jenkins-k8s jenkins/jenkins`
 
 ## Config
 
