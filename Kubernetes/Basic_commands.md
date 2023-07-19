@@ -20,3 +20,6 @@ kubectl logs <pod_name>
 
 # Login to pod with /bin/bash
 kubectl exec --tty --stdin <pod_name> -- /bin/bash
+
+# Delete
+kubectl delete pod <pod_name>

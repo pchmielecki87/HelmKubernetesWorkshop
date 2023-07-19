@@ -1,0 +1,15 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: app1-restart
+spec:
+  schedule: "0 0 * * *"  # This Cron expression runs the job at 12:00 AM every day
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: app1
+            image: app1:latest
+            command: ["kubectl", "rollout", "restart", "deployment/app1"]
+          restartPolicy: OnFailure

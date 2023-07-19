@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kured
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: kured
+  template:
+    metadata:
+      labels:
+        app: kured
+    spec:
+      containers:
+      - name: kured
+        image: kured/kured:latest  # Replace with the appropriate Kured image version.
+        args:
+        - --reboot-days=Mon,Tue,Wed,Thu,Fri,Sat,Sun  # Reboot every day.
+        - --reboot-times=00:00  # Reboot at 12:00 AM.
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: var-run
+          mountPath: /var/run
+      volumes:
+      - name: var-run
+        hostPath:
+          path: /var/run
