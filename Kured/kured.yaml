@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: kured
-        image: kured/kured:latest  # Replace with the appropriate Kured image version.
+        image: kured/kured:1.15.1  # Replace with the appropriate Kured image version.
         args:
         - --reboot-days=Mon,Tue,Wed,Thu,Fri,Sat,Sun  # Reboot every day.
         - --reboot-times=00:00  # Reboot at 12:00 AM.
