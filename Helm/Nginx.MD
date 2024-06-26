@@ -1,6 +1,7 @@
 [Source](https://artifacthub.io/packages/helm/bitnami/nginx)
 
 # Install
+
 - `helm repo add bitnami https://charts.bitnami.com/bitnami`
 - `helm repo update`
 - `helm install simplenginx bitnami/nginx`
@@ -18,4 +19,5 @@
 - use `localhost:80` to view nginx
 
 # Uninstall
+
 - `helm delete simplenginx`

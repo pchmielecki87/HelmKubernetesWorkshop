@@ -1,6 +1,7 @@
 [Source](https://artifacthub.io/packages/helm/elastic/elasticsearch)
 
 # Install
+
 - `helm repo add elastic https://helm.elastic.co`
 - `helm repo update`
 - `helm install elk-k8s --version <version> elastic/elasticsearch`
@@ -15,4 +16,5 @@
 - `helm ls`
 
 # Uninstall
+
 - `helm delete elk-k8s`
