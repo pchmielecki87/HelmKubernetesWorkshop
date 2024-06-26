@@ -1,6 +1,10 @@
+# Helm
+
+## Source
+
 [Source](https://artifacthub.io/packages/helm/bitnami/nginx)
 
-# Install
+## Install
 
 - `helm repo add bitnami https://charts.bitnami.com/bitnami`
 - `helm repo update`
@@ -18,6 +22,6 @@
 - watch the status with `kubectl get svc --namespace default -w simplenginx`
 - use `localhost:80` to view nginx
 
-# Uninstall
+## Uninstall
 
 - `helm delete simplenginx`

@@ -1,36 +1,48 @@
-# Build
-docker build -t <new_docker_image_name> <path_to_Dockerfile>
+# Docker
+
+## Build
+
+docker build -t `new_docker_image_name` `path_to_Dockerfile`
 docker build -t alpine-with-vim .
 
-# List images
+## List images
+
 docker images
 
-# Run
-docker run --name <give_a_name_of_container> -ti <image_name>
+## Run
+
+docker run --name `give_a_name_of_container` -ti `image_name`
 docker run -ti alpine-with-vim /bin/sh
 docker run -d busybox:1.24 sleep 100
 docker run -d postgres sleep 100
 
-# Connect to container
+## Connect to container
+
 docker ps -a
-<guid>
+`guid`
 docker exec -it mynginxplus sh
 
-# Exit
+## Exit
+
 Exit or Ctrl+D
 
-# Tag
-docker tag <guid> <image_name>:<version-branch>
+## Tag
 
-# Inspect JSON
-docker inspect <container_id>
+docker tag `guid` `image_name`:`version-branch`
 
-# Stop
-docker stop <container>
+## Inspect JSON
 
-# Rename
-docker rename <current_container_name> <new_name>
+docker inspect `container_id`
 
-# Remove
-docker rm <container ID | container name>
+## Stop
+
+docker stop `container`
+
+## Rename
+
+docker rename `current_container_name` `new_name`
+
+## Remove
+
+docker rm `container ID | container name`
 docker run --rm busybox:1.24

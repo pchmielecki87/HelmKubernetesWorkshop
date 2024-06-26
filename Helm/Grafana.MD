@@ -1,7 +1,11 @@
+# Helm
+
+## Source
+
 [Source](https://artifacthub.io/packages/helm/grafana/grafana)
 **Works locally**
 
-# Install
+## Install
 
 - `helm repo add grafana https://grafana.github.io/helm-charts`
 - `helm repo update`
@@ -22,6 +26,6 @@
 - check application on `localhost:3000`
 - username: `admin`
 
-# Uninstall
+## Uninstall
 
 - `helm delete grafana-k8s`
