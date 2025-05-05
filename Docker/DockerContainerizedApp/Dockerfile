@@ -1,8 +1,8 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /app
-COPY DockerContainerizedApp/*.csproj ./
+COPY *.csproj ./
 RUN dotnet restore
-COPY DockerContainerizedApp/. ./
+COPY . ./
 RUN dotnet publish -c Release -o out
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
