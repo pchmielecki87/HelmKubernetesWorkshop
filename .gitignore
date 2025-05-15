@@ -1,2 +1,3 @@
 Docker/create_mvc_structure.sh
 Kubernetes/SwaggerUI.yml
+.Kustomize_old/*
