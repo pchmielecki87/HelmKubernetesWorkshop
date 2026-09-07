@@ -207,3 +207,36 @@ kubectl delete pod -l app=shop-backend -n shop-dev
 ```
 
 ArgoCD w ciągu kilku sekund wykryje różnicę ze stanem w Git i automatycznie go odtworzy.
+
+## Troubleshooting
+
+### Restart wdrożenia backendu
+
+Jeśli `shop-backend` nie odpowiada albo wdrożenie utknęło, zrestartuj deployment:
+
+```bash
+kubectl rollout restart deployment shop-backend -n shop-dev
+```
+
+Poczekaj na zakończenie procesu wdrażania:
+
+```bash
+kubectl rollout status deployment/shop-backend -n shop-dev
+```
+
+Sprawdź stan deploymentu i jego podów:
+
+```bash
+kubectl get deployment shop-backend -n shop-dev
+kubectl get pods -n shop-dev -l app=shop-backend
+```
+
+Jeśli problem nadal występuje, sprawdź logi, opis poda oraz ostatnie zdarzenia w namespace:
+
+```bash
+kubectl logs deployment/shop-backend -n shop-dev
+kubectl describe pod -l app=shop-backend -n shop-dev
+kubectl get events -n shop-dev --sort-by=.lastTimestamp
+```
+
+Po restarcie ArgoCD może przez chwilę pokazywać status `Progressing`. Po zakończeniu rollout'u aplikacja powinna wrócić do stanu `Synced` i `Healthy`.
