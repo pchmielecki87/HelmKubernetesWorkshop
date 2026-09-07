@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: shop-backend
-        image: ghcr.io/spring-projects/spring-petclinic:latest
+        image: eclipse-temurin:25-jre
         env:
         - name: DB_HOST
           value: "postgres-service"
