@@ -127,6 +127,25 @@ flowchart TB
   controller -->|Deploys and reconciles| java
 ```
 
+### Krok 3: Zbudowanie obrazu aplikacji Java
+
+Aplikacja backendowa znajduje się w katalogu `ArgoCD/app`. Zbuduj obraz przed wdrożeniem manifestów:
+
+```bash
+docker build -t shop-backend:dev ArgoCD/app
+```
+
+W konfiguracji DEV używany jest obraz `shop-backend:dev` z lokalnego Docker Desktop. Jeśli klaster nie korzysta z lokalnego magazynu obrazów, wypchnij obraz do registry dostępnym dla węzłów Kubernetes i zmień `newName` w pliku `ArgoCD/environments/dev/kustomization.yaml`.
+
+Backend udostępnia następujące endpointy:
+
+- `GET /api/products` - odczyt produktów z PostgreSQL,
+- `POST /api/products` - dodanie produktu do PostgreSQL,
+- `GET /api/carts/{cartId}` - odczyt koszyka z Redis,
+- `POST /api/carts/{cartId}/items` - dodanie produktu do koszyka w Redis,
+- `DELETE /api/carts/{cartId}` - wyczyszczenie koszyka,
+- `GET /actuator/health` - status zdrowia aplikacji.
+
 ### Krok 5: Aktualizacja adresu repozytorium
 
 Podmień adres w pliku ArgoCD/root-application.yaml, aby wskazywał na Twoje repozytorium GitHub:
@@ -237,6 +256,28 @@ Jeśli problem nadal występuje, sprawdź logi, opis poda oraz ostatnie zdarzeni
 kubectl logs deployment/shop-backend -n shop-dev
 kubectl describe pod -l app=shop-backend -n shop-dev
 kubectl get events -n shop-dev --sort-by=.lastTimestamp
+```
+
+Jeśli widzisz `ImagePullBackOff` albo `ErrImagePull`, Kubernetes nie ma dostępu do obrazu `shop-backend:dev`. Zbuduj obraz ponownie w Docker Desktop:
+
+```bash
+docker build -t shop-backend:dev ArgoCD/app
+```
+
+Jeśli węzeł Kubernetes używa osobnego magazynu obrazów, wypchnij obraz do registry dostępnego dla klastra, a następnie ustaw jego adres w `ArgoCD/environments/dev/kustomization.yaml`:
+
+```yaml
+images:
+  - name: shop-backend
+    newName: registry.example.com/shop-backend
+    newTag: dev
+```
+
+Po zmianie obrazu zastosuj manifesty ponownie:
+
+```bash
+kubectl apply -k ArgoCD/environments/dev
+kubectl rollout status deployment/shop-backend -n shop-dev
 ```
 
 Po restarcie ArgoCD może przez chwilę pokazywać status `Progressing`. Po zakończeniu rollout'u aplikacja powinna wrócić do stanu `Synced` i `Healthy`.

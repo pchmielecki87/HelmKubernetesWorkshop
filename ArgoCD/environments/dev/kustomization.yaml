@@ -6,11 +6,11 @@ namespace: shop-dev
 resources:
   - ../../base
 
-# Modyfikacja obrazu na potrzeby środowiska DEV
+# Obraz budowany lokalnie dla klastra Kubernetes w Docker Desktop
 images:
   - name: shop-backend
-    newName: twój-dockerhub/shop-backend
-    newTag: dev-latest
+    newName: shop-backend
+    newTag: dev
 
 # Zwiększenie liczby replik na środowisku DEV
 patches:
