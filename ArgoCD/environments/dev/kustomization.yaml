@@ -6,10 +6,10 @@ namespace: shop-dev
 resources:
   - ../../base
 
-# Obraz budowany lokalnie dla klastra Kubernetes w Docker Desktop
+# Obraz aplikacji opublikowany w GitHub Container Registry
 images:
   - name: shop-backend
-    newName: shop-backend
+    newName: ghcr.io/pchmielecki87/shop-backend
     newTag: dev
 
 # Zwiększenie liczby replik na środowisku DEV
