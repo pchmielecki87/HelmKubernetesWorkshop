@@ -1,283 +1,119 @@
-# ArgoCD GitOps Repository – Shop Application
+# ArgoCD GitOps Repository - Shop Application
 
-Repozytorium manifestów Kubernetes i konfiguracji ArgoCD dla mikrousługi w Javie z bazami danych PostgreSQL (SQL) i Redis (NoSQL).
+This folder contains Kubernetes manifests and a Java Spring Boot backend for a shop application. PostgreSQL stores the product catalogue, while Redis stores shopping carts.
 
-## 📁 Struktura Katalogów
+## Folder Structure
 
 ```text
 ArgoCD/
-├── base/                         # Bazowe manifesty Kubernetes
-│   ├── java-app.yaml             # Deployment i Service dla mikroserwisu Java
-│   ├── postgres.yaml             # Baza danych SQL (Katalog produktów)
-│   ├── redis.yaml                # Baza danych NoSQL (Koszyk sklepowy)
-│   └── kustomization.yaml        # Konfiguracja Kustomize dla pliku base
-├── environments/                 # Konfiguracje dla poszczególnych środowisk
-│   ├── dev/
-│   │   └── kustomization.yaml    # Nadpisanie parametrów dla środowiska DEV
-│   └── prod/
-│       └── kustomization.yaml    # Nadpisanie parametrów dla środowiska PROD
-├── root-application.yaml         # Deklaratywny plik aplikacji ArgoCD (App-of-Apps)
-└── README.md                     # Dokumentacja
+├── app/                         # Java Spring Boot backend and Dockerfile
+├── base/
+│   ├── java-app.yaml            # Backend Deployment and Service
+│   ├── postgres.yaml            # SQL product store
+│   ├── redis.yaml               # NoSQL cart store
+│   └── kustomization.yaml       # Base resources
+├── environments/
+│   ├── dev/kustomization.yaml   # shop-dev, two replicas, GHCR image
+│   └── prod/kustomization.yaml  # shop-prod, three replicas
+├── root-application.yaml        # ArgoCD Application
+└── README.md
 ```
 
-
-## 🏗️ Architektura Środowiska
+## Technical Architecture
 
 ```mermaid
 flowchart LR
-  github["GitHub Repository<br/>(Manifesty)"]
-
-  subgraph docker["Docker Desktop (Kubernetes)"]
-    engine["ArgoCD Engine"]
-    application["ArgoCD Application"]
-
-    subgraph namespace["Namespace: shop-dev"]
-      postgres["PostgreSQL"]
-      redis["Redis"]
-      java["Java App"]
-    end
-
-    engine -->|sync| application
-    application --> postgres
-    application --> redis
-    application --> java
-  end
-
-  github --> application
+    git["GitHub repository"] --> app["ArgoCD Application<br/>shop-stack-dev"]
+    app --> render["Kustomize overlay<br/>environments/dev"]
+    render --> controller["ArgoCD controller"]
+    controller --> backend["Java shop-backend"]
+    controller --> postgres["PostgreSQL<br/>product catalogue"]
+    controller --> redis["Redis<br/>shopping carts"]
+    backend --> postgres
+    backend --> redis
 ```
 
-## 🛠️ Przewodnik Wdrożenia Lokalnego — Krok po Kroku
+This diagram maps the `app`, `base`, `environments`, and `root-application.yaml` files in this folder to the ArgoCD-managed resources.
 
-### Krok 1: Weryfikacja środowiska Kubernetes
-Upewnij się, że Docker Desktop ma włączoną obsługę Kubernetes, a Twój lokalny kontekst jest ustawiony prawidłowo:
+## What Is in the Manifests
+
+- `root-application.yaml` points ArgoCD to the DEV overlay and enables automated sync, pruning, and self-healing.
+- `base/java-app.yaml` configures the Java image, PostgreSQL and Redis service names, credentials, health probes, and Service.
+- `base/postgres.yaml` creates `shopdb`, `shopuser`, and the PostgreSQL Service.
+- `base/redis.yaml` creates the Redis Deployment and Service.
+- `environments/dev/kustomization.yaml` uses the public GHCR image and two backend replicas.
+- `environments/prod/kustomization.yaml` defines the production overlay with three replicas.
+- `app/` contains the Spring Boot products API backed by PostgreSQL and carts API backed by Redis.
+
+## How to Use - Step by Step
+
+### Step 1: Install ArgoCD
+
+Run the commands from the repository root:
+
 ```bash
-kubectl config current-context
-# Oczekiwany wynik: docker-desktop
-```
-
-### Krok 2: Instalacja ArgoCD w klastrze
-
-Utwórz dedykowaną przestrzeń nazw (namespace) i zainstaluj w niej komponenty serwera ArgoCD:
-
-```bash
-kubectl create namespace argocd
+kubectl get namespace argocd >/dev/null 2>&1 || kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl rollout status deployment/argocd-server -n argocd --timeout=180s
 ```
 
-Odczekaj chwilę, aż wszystkie pody osiągną stan Running:
-
-```bash
-kubectl get pods -n argocd --watch
-```
-
-Po wdrożeniu architektura ArgoCD wygląda następująco:
-
-```mermaid
-flowchart TB
-  developer["Administrator / Developer"]
-  github["GitHub<br/>Repozytorium manifestów i konfiguracji"]
-  kubectl["kubectl / ArgoCD CLI"]
-  browser["Przeglądarka<br/>ArgoCD Web UI"]
-
-  subgraph cluster["Docker Desktop - Kubernetes Cluster"]
-    subgraph argocd["Namespace: argocd"]
-      server["argocd-server<br/>API Server + Web UI"]
-      repo["argocd-repo-server<br/>Clone Git + Render Kustomize/Helm"]
-      controller["argocd-application-controller<br/>Observe + Compare + Sync"]
-      applicationset["argocd-applicationset-controller<br/>Generuje obiekty Application"]
-      redis["redis<br/>Cache stanu i manifestów"]
-      dex["argocd-dex-server<br/>SSO / OIDC<br/>(opcjonalnie)"]
-    end
-
-    subgraph target["Namespace docelowy: shop-dev"]
-      application["ArgoCD Application<br/>shop-stack-dev"]
-      kustomize["Kustomize overlay<br/>environments/dev"]
-      postgres["PostgreSQL"]
-      redisapp["Redis"]
-      java["Java App"]
-    end
-
-    kubernetes["Kubernetes API Server"]
-  end
-
-  developer --> browser
-  developer --> kubectl
-  browser -->|HTTPS| server
-  kubectl -->|API requests| server
-  server -->|Authentication / authorization| dex
-  server -->|Read and update Application| kubernetes
-  server -->|Read cached data| redis
-
-  controller -->|Watch Application objects| kubernetes
-  controller -->|Request manifests| repo
-  controller -->|Read cache| redis
-  controller -->|Compare desired vs live state| kubernetes
-  controller -->|Apply, prune and self-heal resources| kubernetes
-
-  applicationset -->|Creates or updates Application| kubernetes
-  repo -->|Clone and poll repository| github
-  repo -->|Rendered manifests| controller
-
-  github -->|Source of truth| repo
-  kubernetes -->|Creates and manages| application
-  application -->|References overlay| kustomize
-  kustomize -->|Desired state| controller
-  controller -->|Deploys and reconciles| postgres
-  controller -->|Deploys and reconciles| redisapp
-  controller -->|Deploys and reconciles| java
-```
-
-### Krok 3: Zbudowanie obrazu aplikacji Java
-
-Aplikacja backendowa znajduje się w katalogu `ArgoCD/app`. Zbuduj obraz przed wdrożeniem manifestów:
+### Step 2: Build and publish the backend image
 
 ```bash
 docker build -t shop-backend:dev ArgoCD/app
+docker tag shop-backend:dev ghcr.io/pchmielecki87/shop-backend:dev
+docker push ghcr.io/pchmielecki87/shop-backend:dev
 ```
 
-W konfiguracji DEV używany jest obraz `shop-backend:dev` z lokalnego Docker Desktop. Jeśli klaster nie korzysta z lokalnego magazynu obrazów, wypchnij obraz do registry dostępnym dla węzłów Kubernetes i zmień `newName` w pliku `ArgoCD/environments/dev/kustomization.yaml`.
+The GHCR package must be public, or the cluster must have an image pull Secret.
 
-Backend udostępnia następujące endpointy:
-
-- `GET /api/products` - odczyt produktów z PostgreSQL,
-- `POST /api/products` - dodanie produktu do PostgreSQL,
-- `GET /api/carts/{cartId}` - odczyt koszyka z Redis,
-- `POST /api/carts/{cartId}/items` - dodanie produktu do koszyka w Redis,
-- `DELETE /api/carts/{cartId}` - wyczyszczenie koszyka,
-- `GET /actuator/health` - status zdrowia aplikacji.
-
-### Krok 5: Aktualizacja adresu repozytorium
-
-Podmień adres w pliku ArgoCD/root-application.yaml, aby wskazywał na Twoje repozytorium GitHub:
-
-```yaml
-spec:
-  source:
-    repoURL: 'https://github.com/pchmielecki87/HelmKubernetesWorkshop.git'
-```
-
-Zapisz plik i wypchnij zmianę do Git:
-
-```bash
-git add ArgoCD/root-application.yaml
-git commit -m "fix: aktualizacja repoURL"
-git push
-```
-
-### Krok 6: Rejestracja aplikacji w ArgoCD
-
-Przekaż zarządzanie stosem aplikacji do ArgoCD za pomocą głównego manifestu:
+### Step 3: Apply and inspect the ArgoCD Application
 
 ```bash
 kubectl apply -f ArgoCD/root-application.yaml
+kubectl get application shop-stack-dev -n argocd
+kubectl get application shop-stack-dev -n argocd -w
 ```
 
-### Krok 7: Dostęp do panelu ArgoCD (Web UI)
-
-Przekieruj port panelu administracyjnego na swój komputer:
+Wait until the application reports `Synced` and `Healthy`, then verify the workloads:
 
 ```bash
-kubectl port-forward svc/argocd-server -n argocd 8080:443
+kubectl get pods -n shop-dev
+kubectl rollout status deployment/shop-backend -n shop-dev --timeout=180s
 ```
 
-Otwórz nowy terminal i pobierz wygenerowane domyślne hasło dla konta admin:
+### Step 4: Test the API locally
 
 ```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
+kubectl port-forward svc/shop-backend-service -n shop-dev 8080:8080
+curl http://localhost:8080/actuator/health
+curl http://localhost:8080/api/products
+curl -X POST http://localhost:8080/api/carts/alice/items \
+  -H 'Content-Type: application/json' \
+  -d '{"productId":1,"quantity":2}'
 ```
 
-Otwórz w przeglądarce adres https://localhost:8080 (zaakceptuj ostrzeżenie o certyfikacie SSL).
+## Use Cases
 
-Zaloguj się danymi:
+- Git-driven Kubernetes delivery with automated reconciliation.
+- Self-healing after manual drift or pod deletion.
+- A Java shop service using SQL for products and NoSQL for carts.
+- Environment-specific scaling and image configuration with Kustomize.
 
-- **Login:** `admin`
-- **Hasło:** hasło wygenerowane w kroku 2
-### Krok 8: Weryfikacja stanu i testy GitOps
+## Limitations
 
-#### 1. Weryfikacja wdrożenia
-
-W panelu ArgoCD aplikacja shop-stack-dev powinna mieć status Synced oraz Healthy.
-
-Sprawdź uruchomione zasoby w przestrzeni shop-dev:
-
-```bash
-kubectl get all -n shop-dev
-```
-
-#### 2. Test automatycznej synchronizacji (Auto-Sync)
-
-1. Otwórz plik `ArgoCD/environments/dev/kustomization.yaml`.
-2. Zmień liczbę replik backendu z 2 na 3.
-3. Zcommituj i wypchnij zmianę:
-
-  ```bash
-git commit -am "chore: zmiana liczby replik na 3"
-git push
-  ```
-
-4. Obserwuj w panelu ArgoCD, jak bez wpisywania komend `kubectl` automatycznie tworzy się trzeci pod.
-
-#### 3. Test samoleczenia (Self-Healing)
-
-Ręcznie skasuj pod z klastra:
-
-```bash
-kubectl delete pod -l app=shop-backend -n shop-dev
-```
-
-ArgoCD w ciągu kilku sekund wykryje różnicę ze stanem w Git i automatycznie go odtworzy.
+Credentials are training values in manifests. PostgreSQL and Redis use Deployments without persistent volumes. The GHCR image must be public or referenced with an image pull Secret. `targetRevision: HEAD` follows the branch head, and automated pruning can delete resources removed from Git.
 
 ## Troubleshooting
 
-### Restart wdrożenia backendu
-
-Jeśli `shop-backend` nie odpowiada albo wdrożenie utknęło, zrestartuj deployment:
-
 ```bash
+kubectl get application shop-stack-dev -n argocd -o yaml
+kubectl get events -n shop-dev --sort-by=.lastTimestamp
+kubectl logs deployment/shop-backend -n shop-dev
+kubectl rollout status deployment/shop-backend -n shop-dev
 kubectl rollout restart deployment shop-backend -n shop-dev
 ```
 
-Poczekaj na zakończenie procesu wdrażania:
+For `ImagePullBackOff`, verify the GHCR package visibility and image tag. For `Progressing`, inspect probe failures and application logs. For `OutOfSync`, compare the ArgoCD revision with the GitHub branch.
 
-```bash
-kubectl rollout status deployment/shop-backend -n shop-dev
-```
-
-Sprawdź stan deploymentu i jego podów:
-
-```bash
-kubectl get deployment shop-backend -n shop-dev
-kubectl get pods -n shop-dev -l app=shop-backend
-```
-
-Jeśli problem nadal występuje, sprawdź logi, opis poda oraz ostatnie zdarzenia w namespace:
-
-```bash
-kubectl logs deployment/shop-backend -n shop-dev
-kubectl describe pod -l app=shop-backend -n shop-dev
-kubectl get events -n shop-dev --sort-by=.lastTimestamp
-```
-
-Jeśli widzisz `ImagePullBackOff` albo `ErrImagePull`, Kubernetes nie ma dostępu do obrazu `shop-backend:dev`. Zbuduj obraz ponownie w Docker Desktop:
-
-```bash
-docker build -t shop-backend:dev ArgoCD/app
-```
-
-Jeśli węzeł Kubernetes używa osobnego magazynu obrazów, wypchnij obraz do registry dostępnego dla klastra, a następnie ustaw jego adres w `ArgoCD/environments/dev/kustomization.yaml`:
-
-```yaml
-images:
-  - name: shop-backend
-    newName: registry.example.com/shop-backend
-    newTag: dev
-```
-
-Po zmianie obrazu zastosuj manifesty ponownie:
-
-```bash
-kubectl apply -k ArgoCD/environments/dev
-kubectl rollout status deployment/shop-backend -n shop-dev
-```
-
-Po restarcie ArgoCD może przez chwilę pokazywać status `Progressing`. Po zakończeniu rollout'u aplikacja powinna wrócić do stanu `Synced` i `Healthy`.
+See the detailed guide in [`docs/06-argocd.md`](../docs/06-argocd.md).
