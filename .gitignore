@@ -1,3 +1,5 @@
 Docker/create_mvc_structure.sh
 argocd-init-project.sh
 **/target/
+.DS_Store
+ArgoCD.zip
