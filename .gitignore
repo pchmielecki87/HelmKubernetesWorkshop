@@ -3,3 +3,4 @@ argocd-init-project.sh
 **/target/
 .DS_Store
 ArgoCD.zip
+ArgoCD.zip.old

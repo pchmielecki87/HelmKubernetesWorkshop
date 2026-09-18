@@ -228,38 +228,50 @@ Expected result: the temporary `ConfigMap` disappears because ArgoCD prunes reso
 
 3. Optional extension: compare with the `kubectl get application ... -o yaml` output and verify the `syncPolicy.automated.prune: true` setting from `root-application.yaml`.
 
-### Step 8: Practice pre-sync validation
+### Step 8: Practice ArgoCD PreSync Hooks (Database Migration Job)
 
-This exercise demonstrates a pre-sync hook: ArgoCD checks a condition before it applies the new desired state.
+This exercise demonstrates how ArgoCD uses **Resource Hooks** to run a database migration `Job` during the `PreSync` phase—executing and verifying it before sync applies the main application resources (`Deployment`).
 
-Create a small validation job that fails if the namespace is not healthy or the target service is unavailable:
+1. Add a PreSync `Job` manifest for the database migration:
 
 ```bash
-cat <<'EOF' > /tmp/pre-sync-check.yaml
+cat <<'EOF' > base/db-migration-job.yaml
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: pre-sync-check
-  namespace: shop-dev
+  name: db-migration-job
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
 spec:
   template:
     spec:
-      restartPolicy: Never
       containers:
-        - name: check
-          image: busybox:1.36
-          command: ["sh", "-c", "wget -q -O- http://shop-backend-service:8080/actuator/health || exit 1"]
+      - name: db-migrator
+        image: postgres:15-alpine
+        command: ["sh", "-c", "echo 'Running PreSync DB Schema Migration...' && sleep 5"]
+      restartPolicy: Never
+  backoffLimit: 1
 EOF
-kubectl apply -f /tmp/pre-sync-check.yaml
 ```
 
-Then add a `preSync` hook in the Application or use a similar validation script in a separate GitOps pipeline. The key idea is:
+Update the base Kustomization to include the migration job:
 
-- ArgoCD runs the pre-sync validation before applying changes.
-- If the validation fails, synchronization stops.
-- This is useful when you want to verify the app is healthy before a risky change is applied.
+```yaml
+resources:
+  - java-app.yaml
+  - postgres.yaml
+  - redis.yaml
+  - db-migration-job.yaml
+```
 
-A good exercise is to temporarily break the service route or deliberately remove a required dependency and confirm that the sync is blocked until the validation succeeds again.
+Commit and push the changes to your Git repository. Trigger a sync and observe the execution order in ArgoCD:
+
+```bash
+kubectl get pods -n shop-dev -w
+```
+
+Expected result: ArgoCD first creates and waits for db-migration-job to complete successfully during the PreSync phase. Only after the job finishes will ArgoCD proceed to synchronize the main application stack (shop-backend, postgres, redis). Once finished, the job pod is automatically cleaned up per the HookSucceeded delete policy.
 
 ## Misc
 

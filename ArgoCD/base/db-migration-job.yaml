@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration-job
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  template:
+    spec:
+      containers:
+        - name: db-migrator
+          image: postgres:15-alpine
+          command:
+            [
+              "sh",
+              "-c",
+              "echo 'Running PreSync DB Schema Migration...' && sleep 5",
+            ]
+      restartPolicy: Never
+  backoffLimit: 1
