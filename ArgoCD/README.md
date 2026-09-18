@@ -55,6 +55,7 @@ Run the commands from the repository root:
 kubectl get namespace argocd >/dev/null 2>&1 || kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 kubectl rollout status deployment/argocd-server -n argocd --timeout=180s
+kubectl get all -n argocd
 ```
 
 ### Step 2: Build and publish the backend image
@@ -63,9 +64,16 @@ kubectl rollout status deployment/argocd-server -n argocd --timeout=180s
 docker build -t shop-backend:dev ArgoCD/app
 docker tag shop-backend:dev ghcr.io/pchmielecki87/shop-backend:dev
 docker push ghcr.io/pchmielecki87/shop-backend:dev
+docker images
 ```
 
 The GHCR package must be public, or the cluster must have an image pull Secret.
+
+To verify if image is in place navigate to [https://github.com/pchmielecki87?tab=packages](https://github.com/pchmielecki87?tab=packages) or use CLI command:
+
+```bash
+docker buildx imagetools inspect ghcr.io/pchmielecki87/shop-backend:dev
+```
 
 ### Step 3: Apply and inspect the ArgoCD Application
 
@@ -84,13 +92,28 @@ kubectl rollout status deployment/shop-backend -n shop-dev --timeout=180s
 
 ### Step 4: Test the API locally
 
+Check the app health:
+
 ```bash
 kubectl port-forward svc/shop-backend-service -n shop-dev 8080:8080
 curl http://localhost:8080/actuator/health
 curl http://localhost:8080/api/products
+```
+
+Add item to cart:
+
+```bash
 curl -X POST http://localhost:8080/api/carts/alice/items \
   -H 'Content-Type: application/json' \
   -d '{"productId":1,"quantity":2}'
+```
+
+Check cart (3 options):
+
+```bash
+curl -X GET http://localhost:8080/api/carts/alice
+curl -s http://localhost:8080/api/carts/alice | jq .
+kubectl exec -it deployment/redis -n shop-dev -- redis-cli HGETALL cart:alice
 ```
 
 ## Use Cases
