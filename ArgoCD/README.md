@@ -116,6 +116,30 @@ curl -s http://localhost:8080/api/carts/alice | jq .
 kubectl exec -it deployment/redis -n shop-dev -- redis-cli HGETALL cart:alice
 ```
 
+### Step 5: Log in to the ArgoCD Web UI
+
+Get the initial admin password and forward the ArgoCD server port locally:
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+kubectl port-forward svc/argocd-server -n argocd 8088:443
+```
+
+Then open:
+
+```text
+https://localhost:8088
+```
+
+Login with:
+
+```text
+username: admin
+password: <password-from-command-above>
+```
+
+> The browser may show a certificate warning because ArgoCD uses a self-signed certificate by default. Accept the warning and continue.
+
 ## Use Cases
 
 - Git-driven Kubernetes delivery with automated reconciliation.
