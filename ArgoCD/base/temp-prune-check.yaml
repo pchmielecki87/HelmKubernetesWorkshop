@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: temp-prune-check
-  namespace: shop-dev
-  labels:
-    app: drift-demo
-data:
-  note: "This ConfigMap is managed by Git and should be pruned when removed from Git"
