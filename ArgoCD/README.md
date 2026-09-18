@@ -19,7 +19,7 @@ ArgoCD/
 └── README.md
 ```
 
-## Technical Architecture
+## System Architecture
 
 ```mermaid
 flowchart LR
@@ -45,7 +45,7 @@ This diagram maps the `app`, `base`, `environments`, and `root-application.yaml`
 - `environments/prod/kustomization.yaml` defines the production overlay with three replicas.
 - `app/` contains the Spring Boot products API backed by PostgreSQL and carts API backed by Redis.
 
-## How to Use - Step by Step
+## Initinal How to Use - Step by Step
 
 ### Step 1: Install ArgoCD
 
@@ -64,7 +64,6 @@ kubectl get all -n argocd
 docker build -t shop-backend:dev ArgoCD/app
 docker tag shop-backend:dev ghcr.io/pchmielecki87/shop-backend:dev
 docker push ghcr.io/pchmielecki87/shop-backend:dev
-docker images
 ```
 
 The GHCR package must be public, or the cluster must have an image pull Secret.
@@ -116,6 +115,12 @@ curl -s http://localhost:8080/api/carts/alice | jq .
 kubectl exec -it deployment/redis -n shop-dev -- redis-cli HGETALL cart:alice
 ```
 
+Delete item from cart:
+
+```bash
+curl -X DELETE http://localhost:8080/api/carts/alice
+```
+
 ### Step 5: Log in to the ArgoCD Web UI
 
 Get the initial admin password and forward the ArgoCD server port locally:
@@ -140,18 +145,28 @@ password: <password-from-command-above>
 
 > The browser may show a certificate warning because ArgoCD uses a self-signed certificate by default. Accept the warning and continue.
 
-## Use Cases
+## Advanced usage - Step by Step
+
+### Step 6:
+
+### Step 7:
+
+### Step 8:
+
+## Misc
+
+### Use Cases
 
 - Git-driven Kubernetes delivery with automated reconciliation.
 - Self-healing after manual drift or pod deletion.
 - A Java shop service using SQL for products and NoSQL for carts.
 - Environment-specific scaling and image configuration with Kustomize.
 
-## Limitations
+### Limitations
 
 Credentials are training values in manifests. PostgreSQL and Redis use Deployments without persistent volumes. The GHCR image must be public or referenced with an image pull Secret. `targetRevision: HEAD` follows the branch head, and automated pruning can delete resources removed from Git.
 
-## Troubleshooting
+### Troubleshooting
 
 ```bash
 kubectl get application shop-stack-dev -n argocd -o yaml
