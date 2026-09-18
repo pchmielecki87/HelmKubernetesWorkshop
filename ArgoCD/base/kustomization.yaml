@@ -6,4 +6,4 @@ resources:
   - redis.yaml
   - java-app.yaml
   # - temp-prune-check.yaml   #prune excercise
-  - db-migration-job.yaml #pre-sync excercise
+  # - db-migration-job.yaml   #pre-sync excercise
