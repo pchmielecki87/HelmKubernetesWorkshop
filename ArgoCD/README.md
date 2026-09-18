@@ -45,9 +45,9 @@ This diagram maps the `app`, `base`, `environments`, and `root-application.yaml`
 - `environments/prod/kustomization.yaml` defines the production overlay with three replicas.
 - `app/` contains the Spring Boot products API backed by PostgreSQL and carts API backed by Redis.
 
-## Initinal How to Use - Step by Step
+## Initinal Config and App Management
 
-### Step 1: Install ArgoCD
+### 1: Install ArgoCD
 
 Run the commands from the repository root:
 
@@ -58,7 +58,7 @@ kubectl rollout status deployment/argocd-server -n argocd --timeout=180s
 kubectl get all -n argocd
 ```
 
-### Step 2: Build and publish the backend image
+### 2: Build and publish the backend image
 
 ```bash
 docker build -t shop-backend:dev ArgoCD/app
@@ -74,7 +74,7 @@ To verify if image is in place navigate to [https://github.com/pchmielecki87?tab
 docker buildx imagetools inspect ghcr.io/pchmielecki87/shop-backend:dev
 ```
 
-### Step 3: Apply and inspect the ArgoCD Application
+### 3: Apply and inspect the ArgoCD Application
 
 ```bash
 kubectl apply -f ArgoCD/root-application.yaml
@@ -89,7 +89,7 @@ kubectl get pods -n shop-dev
 kubectl rollout status deployment/shop-backend -n shop-dev --timeout=180s
 ```
 
-### Step 4: Test the API locally
+### 4: Test the API locally
 
 Check the app health:
 
@@ -121,7 +121,7 @@ Delete item from cart:
 curl -X DELETE http://localhost:8080/api/carts/alice
 ```
 
-### Step 5: Log in to the ArgoCD Web UI
+### 5: Log in to the ArgoCD Web UI
 
 Get the initial admin password and forward the ArgoCD server port locally:
 
@@ -145,9 +145,9 @@ password: <password-from-command-above>
 
 > The browser may show a certificate warning because ArgoCD uses a self-signed certificate by default. Accept the warning and continue.
 
-## Advanced usage - Step by Step
+## Automation and Hooks
 
-### Step 6: Simulate drift and confirm self-healing
+### 6: Simulate drift and confirm self-healing
 
 Check the current desired state in Git:
 
@@ -171,7 +171,7 @@ kubectl get application shop-stack-dev -n argocd -o yaml | grep -E 'Status:|Heal
 
 Expected result: the replica count returns to the Git-defined value (for this repo: `2`), and the application status becomes `Synced` and `Healthy` again.
 
-### Step 7: Practice prune behavior
+### 7: Practice prune behavior
 
 This exercise shows how ArgoCD removes resources that no longer exist in Git when `prune: true` is enabled.
 
@@ -228,7 +228,7 @@ Expected result: the temporary `ConfigMap` disappears because ArgoCD prunes reso
 
 3. Optional extension: compare with the `kubectl get application ... -o yaml` output and verify the `syncPolicy.automated.prune: true` setting from `root-application.yaml`.
 
-### Step 8: Practice ArgoCD PreSync Hooks (Database Migration Job)
+### 8: Practice ArgoCD PreSync Hooks (Database Migration Job)
 
 This exercise demonstrates how ArgoCD uses **Resource Hooks** to run a database migration `Job` during the `PreSync` phase—executing and verifying it before sync applies the main application resources (`Deployment`).
 
@@ -272,6 +272,230 @@ kubectl get pods -n shop-dev -w
 ```
 
 Expected result: ArgoCD first creates and waits for db-migration-job to complete successfully during the PreSync phase. Only after the job finishes will ArgoCD proceed to synchronize the main application stack (shop-backend, postgres, redis). Once finished, the job pod is automatically cleaned up per the HookSucceeded delete policy.
+
+## IAM
+
+### 8: Create developer user and RBAC permissions
+
+In enterprise cloud environments (AWS EKS or Azure AKS), ArgoCD integrates directly with IAM (via AWS IAM Identity Center) or Entra ID (Azure AD) using OpenID Connect (OIDC). On Docker Desktop, we simulate this workflow using ArgoCD's built-in RBAC engine with local users or mock Dex OIDC tokens.
+
+1. Enable local user management in ArgoCD by editing the `argocd-cm` ConfigMap:
+
+```bash
+kubectl patch configmap argocd-cm -n argocd --type merge -p '{"data":{"accounts.developer":"apiKey, login", "accounts.developer.enabled":"true"}}'
+```
+
+2. Assign a read-only RBAC policy for the developer user in the argocd-rbac-cm ConfigMap:
+
+```bash
+kubectl patch configmap argocd-rbac-cm -n argocd --type merge -p '{"data":{"policy.csv":"p, role:dev-readonly, applications, get, shop-dev/*, allow\np, role:dev-readonly, applications, sync, shop-dev/*, deny\ng, developer, role:dev-readonly"}}'
+```
+
+Set a password for the newly created developer user:
+
+```bash
+HASH=$(docker run --rm caddy caddy hash-password --plaintext 'DeveloperPass123')
+kubectl patch secret argocd-secret -n argocd --type merge -p "{\"stringData\": {\"accounts.developer.password\": \"$HASH\", \"accounts.developer.mtime\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}"
+```
+
+Optionally restart might be needed:
+
+```bash
+kubectl rollout restart deployment argocd-server -n argocd
+kubectl rollout status deployment argocd-server -n argocd
+```
+
+Then re-enable ArgoCD UI after restart:
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8088:443
+```
+
+3. Log in to ArgoCD UI:
+
+- Open http://localhost:8088 in your browser.
+- Log out from the admin account.
+- Log in with credentials:
+- Username: developer
+- Password: DeveloperPass123
+
+Expected result: Authentication succeeds, and the top right panel shows you are logged in as developer.
+
+NOTE: As developer you cannot see any applications. Update RBAC role to be able to see it:
+
+```bash
+kubectl patch configmap argocd-rbac-cm -n argocd --type merge -p '{"data":{"policy.csv":"p, role:dev-readonly, applications, get, */*, allow\np, role:dev-readonly, applications, sync, */*, deny\np, role:dev-readonly, projects, get, *, allow\ng, developer, role:dev-readonly"}}'
+```
+
+### 10: Test Unauthorized Actions & Policy Enforcement
+
+Verify that RBAC policies actively block restricted operations (such as manual triggers or synchronization) in the ArgoCD Web UI for non-admin roles.
+
+View the application status in the Web UI (Allowed action):
+
+- Click on the shop-stack-dev application tile.
+- Expected result: You can successfully view application topology, resources, tree view, and live status (Synced / Healthy).
+
+Attempt to trigger a manual sync via the UI (Forbidden action):
+
+- Click the SYNC button at the top menu.
+- Click SYNCHRONIZE.
+- Expected result: The UI blocks the action and displays an error notification banner:
+- PermissionDenied: permission denied: applications, sync, shop-dev/shop-stack-dev, deny
+
+Note on Enterprise IAM Mapping (AWS / Azure):
+
+- AWS IAM: OIDC claims map AWS SSO / IAM Identity Center groups (arn:aws:iam::123456789012:role/DeveloperRole) directly to role:dev-readonly in policy.csv.
+- Azure Entra ID: Azure App Registration security group Object IDs (g, 90f0d111-2222-3333-4444-555555555555, role:dev-readonly) are matched in argocd-rbac-cm.
+
+### 11: Inspect Audit Logs and Security Events
+
+Audit and track changes, authorization failures, and administrative actions in ArgoCD.
+Stream ArgoCD API Server logs to inspect denied access requests:
+
+```bash
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=50 | grep -i "permission denied"
+```
+
+Expected result: Locate the audit entry generated by Step 16, detailing the timestamp, user (developer), requested action (sync), and denial reason.
+
+Inspect Kubernetes Audit / Event log entries for unauthorized cluster-level activity in the target namespace:
+
+```bash
+kubectl get events -n shop-dev --sort-by='.lastTimestamp'
+```
+
+Verify application history and revision audits directly via ArgoCD:
+
+```bash
+kubectl get application shop-stack-dev -n argocd -o jsonpath='{range .status.history[*]}{"Revision: "}{.revision}{" | DeployedAt: "}{.deployedAt}{"\n"}{end}'
+```
+
+Expected result: Displays a complete audit trail of past synchronizations, including the commit SHA, timestamp, and author for every deployment in the GitOps pipeline.
+
+## Monitoring & Troubleshooting
+
+### Prerequisites: Quick Prometheus & Grafana Setup (Docker Desktop)
+
+Install the Prometheus & Grafana monitoring stack via Helm optimized for Docker Desktop resource limits.
+
+1. Add the Helm repository and install `kube-prometheus-stack`:
+
+```bash
+helm repo add prometheus-community [https://prometheus-community.github.io/helm-charts](https://prometheus-community.github.io/helm-charts)
+helm repo update
+
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --set alertmanager.enabled=false \
+  --set prometheus.prometheusSpec.resources.requests.memory=256Mi \
+  --set prometheus.prometheusSpec.resources.limits.memory=512Mi
+```
+
+Access the Grafana Dashboard locally:
+
+```bash
+kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
+```
+
+URL: http://localhost:3000
+Username: admin
+Password: Get the generated secret via:
+
+```bash
+kubectl get secret --namespace monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+```
+
+### 12: Trigger an Deployment Failure via Git
+
+Simulate a failed deployment scenario by introducing an invalid container image tag into your Git repository so ArgoCD treats it as the desired state.
+Modify the backend image tag in your Kustomize overlay (environments/dev/kustomization.yaml):
+
+```yaml
+images:
+  - name: wiremock/wiremock
+    newName: wiremock/wiremock
+    newTag: dev-does-not-exist
+```
+
+Commit and push the broken configuration to Git:
+
+```bash
+git add environments/dev/kustomization.yaml
+git commit -m "lab: invalid backend tag"
+git push origin main
+```
+
+Observe the deployment status in your local cluster:
+
+```bash
+kubectl get application shop-stack-dev -n argocd -w
+kubectl get pods -n shop-dev -w
+```
+
+Expected result: The Application state in ArgoCD transitions away from Healthy, and the newly created backend Pod fails to reach the Ready state.
+
+### 13: Diagnose the Root Cause
+
+Perform a structured root-cause analysis by inspecting ArgoCD, the Deployment status, and the Pod events to locate the issue.
+Inspect the overall application health in ArgoCD:
+
+```bash
+argocd app get shop-stack-dev
+kubectl describe application shop-stack-dev -n argocd
+```
+
+Expected result: Look for Degraded or Progressing health statuses, sync condition errors, or failed operations.
+Check the Deployment rollout status and list running Pods:
+
+```bash
+kubectl rollout status deploy/shop-backend -n shop-dev --timeout=60s
+kubectl get pods -n shop-dev
+```
+
+Expected result: The rollout exceeds the timeout threshold, and the new Pod shows an ImagePullBackOff or ErrImagePull status.
+Inspect Kubernetes events to confirm the exact failure reason:
+
+```bash
+kubectl describe pod -l app=shop-backend -n shop-dev
+kubectl get events -n shop-dev --sort-by='.lastTimestamp'
+```
+
+Expected result: Confirm a Failed / PullImage event stating that the image tag wiremock/wiremock:dev-does-not-exist was not found in the registry.
+
+### 14: Repair and Verify Service Recovery
+
+Fix the desired state in Git using GitOps practices (do not edit the Deployment directly using kubectl). Auto-sync will deploy the corrected revision and recover the service.
+Revert the breaking commit in Git (or fix the tag manually in kustomization.yaml):
+
+```bash
+git revert HEAD --no-edit
+git push origin main
+```
+
+Wait for ArgoCD to detect the fix and complete the rollout:
+
+```bash
+argocd app wait shop-stack-dev --sync --health --timeout 300
+kubectl rollout status deploy/shop-backend -n shop-dev
+```
+
+Expected result: ArgoCD status returns to Synced and Healthy, with the rollout successfully completed.
+Verify service health and pod status:
+
+```bash
+kubectl get pods -n shop-dev
+kubectl port-forward svc/shop-backend-service 8080:8080 -n shop-dev
+```
+
+Test the endpoint in a second terminal:
+
+```bash
+curl http://localhost:8080/\_\_admin/
+```
+
+Expected result: All Pods display 1/1 Running / Ready, and the backend REST service responds with HTTP 200.
 
 ## Misc
 
