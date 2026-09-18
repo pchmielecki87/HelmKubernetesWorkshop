@@ -147,11 +147,119 @@ password: <password-from-command-above>
 
 ## Advanced usage - Step by Step
 
-### Step 6:
+### Step 6: Simulate drift and confirm self-healing
 
-### Step 7:
+Check the current desired state in Git:
 
-### Step 8:
+```bash
+kubectl get deployment shop-backend -n shop-dev -o jsonpath='{.spec.replicas}'
+```
+
+Manually change the live Deployment replica count to create drift:
+
+```bash
+kubectl scale deployment/shop-backend -n shop-dev --replicas=1
+kubectl get application shop-stack-dev -n argocd
+```
+
+ArgoCD should detect the drift and restore the desired value from Git automatically. You can verify it with:
+
+```bash
+kubectl get deployment shop-backend -n shop-dev -o jsonpath='{.spec.replicas}'
+kubectl get application shop-stack-dev -n argocd -o yaml | grep -E 'Status:|Health:|Operation'
+```
+
+Expected result: the replica count returns to the Git-defined value (for this repo: `2`), and the application status becomes `Synced` and `Healthy` again.
+
+### Step 7: Practice prune behavior
+
+This exercise shows how ArgoCD removes resources that no longer exist in Git when `prune: true` is enabled.
+
+1. Add a temporary `ConfigMap` to the Git-managed manifests first, then apply it:
+
+```bash
+cat <<'EOF' > base/temp-prune-check.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temp-prune-check
+  namespace: shop-dev
+  labels:
+    app: drift-demo
+data:
+  note: "This ConfigMap is managed by Git and should be pruned when removed from Git"
+EOF
+```
+
+Update the base Kustomization to include the file:
+
+```yaml
+resources:
+  - java-app.yaml
+  - postgres.yaml
+  - redis.yaml
+  - temp-prune-check.yaml
+```
+
+Then sync:
+
+```bash
+kubectl apply -k environments/dev
+kubectl get configmap -n shop-dev
+kubectl get application shop-stack-dev -n argocd
+```
+
+2. Remove the file from Git and from the Kustomization, then trigger a sync:
+
+```bash
+rm base/temp-prune-check.yaml
+```
+
+And update `base/kustomization.yaml` to remove the entry from `resources`. Then push the changes to Git repo.
+
+Then refresh ArgoCD:
+
+```bash
+kubectl get application shop-stack-dev -n argocd
+kubectl get configmap -n shop-dev
+```
+
+Expected result: the temporary `ConfigMap` disappears because ArgoCD prunes resources no longer declared in Git.
+
+3. Optional extension: compare with the `kubectl get application ... -o yaml` output and verify the `syncPolicy.automated.prune: true` setting from `root-application.yaml`.
+
+### Step 8: Practice pre-sync validation
+
+This exercise demonstrates a pre-sync hook: ArgoCD checks a condition before it applies the new desired state.
+
+Create a small validation job that fails if the namespace is not healthy or the target service is unavailable:
+
+```bash
+cat <<'EOF' > /tmp/pre-sync-check.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pre-sync-check
+  namespace: shop-dev
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: check
+          image: busybox:1.36
+          command: ["sh", "-c", "wget -q -O- http://shop-backend-service:8080/actuator/health || exit 1"]
+EOF
+kubectl apply -f /tmp/pre-sync-check.yaml
+```
+
+Then add a `preSync` hook in the Application or use a similar validation script in a separate GitOps pipeline. The key idea is:
+
+- ArgoCD runs the pre-sync validation before applying changes.
+- If the validation fails, synchronization stops.
+- This is useful when you want to verify the app is healthy before a risky change is applied.
+
+A good exercise is to temporarily break the service route or deliberately remove a required dependency and confirm that the sync is blocked until the validation succeeds again.
 
 ## Misc
 

@@ -5,3 +5,4 @@ resources:
   - postgres.yaml
   - redis.yaml
   - java-app.yaml
+  # - temp-prune-check.yaml
