@@ -473,6 +473,7 @@ kubectl get events -n shop-dev --sort-by='.lastTimestamp'
 Inspect node-level system journal / container daemon logs (simulated on Docker Desktop node via kubectl node-shell or debug pod):
 
 ```bash
+# 1. Create debug pod in background
 NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 kubectl debug node/$NODE_NAME -n default --image=alpine --profile=sysadmin -it -- chroot /host journalctl -u containerd -n 50
 
