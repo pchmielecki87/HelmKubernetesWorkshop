@@ -382,7 +382,7 @@ Install the Prometheus & Grafana monitoring stack via Helm optimized for Docker 
 1. Add the Helm repository and install `kube-prometheus-stack`:
 
 ```bash
-helm repo add prometheus-community [https://prometheus-community.github.io/helm-charts](https://prometheus-community.github.io/helm-charts)
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
 helm install monitoring prometheus-community/kube-prometheus-stack \
@@ -393,6 +393,12 @@ helm install monitoring prometheus-community/kube-prometheus-stack \
   --set prometheus.prometheusSpec.resources.limits.memory=512Mi
 ```
 
+Decode secret:
+
+```bash
+kubectl get secret --namespace monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+```
+
 Access the Grafana Dashboard locally:
 
 ```bash
@@ -401,11 +407,7 @@ kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
 
 URL: http://localhost:3000
 Username: admin
-Password: Get the generated secret via:
-
-```bash
-kubectl get secret --namespace monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
-```
+Password: generated secret
 
 ### 12: Trigger an Deployment Failure via Git
 
