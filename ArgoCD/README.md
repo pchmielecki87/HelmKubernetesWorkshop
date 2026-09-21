@@ -1,3 +1,7 @@
+# GitOps with ArgoCD Workshop
+## 📋 Table of Contents
+- [GitOps with ArgoCD Workshop](#gitops-with-argocd-workshop)
+  - [📋 Table of Contents](#-table-of-contents)
 - [ArgoCD GitOps Repository - Shop Application](#argocd-gitops-repository---shop-application)
   - [Folder Structure](#folder-structure)
   - [System Architecture](#system-architecture)
@@ -22,10 +26,10 @@
     - [12: Trigger an Deployment Failure via Git](#12-trigger-an-deployment-failure-via-git)
     - [13: Diagnose the Root Cause](#13-diagnose-the-root-cause)
     - [14: Repair and Verify Service Recovery](#14-repair-and-verify-service-recovery)
-  - [Misc](#misc)
-    - [Use Cases](#use-cases)
-    - [Limitations](#limitations)
-    - [Troubleshooting](#troubleshooting)
+- [Misc](#misc)
+  - [Use Cases](#use-cases)
+  - [Limitations](#limitations)
+  - [Troubleshooting](#troubleshooting)
 
 # ArgoCD GitOps Repository - Shop Application
 
@@ -540,20 +544,20 @@ kubectl rollout status deploy/shop-backend -n shop-dev
 Expected result: ArgoCD status returns to Synced and Healthy, with the rollout successfully completed.
 Verify service health in ArgoCD UI portal. Expected result: All Pods display 1/1 Running.
 
-## Misc
+# Misc
 
-### Use Cases
+## Use Cases
 
 - Git-driven Kubernetes delivery with automated reconciliation.
 - Self-healing after manual drift or pod deletion.
 - A Java shop service using SQL for products and NoSQL for carts.
 - Environment-specific scaling and image configuration with Kustomize.
 
-### Limitations
+## Limitations
 
 Credentials are training values in manifests. PostgreSQL and Redis use Deployments without persistent volumes. The GHCR image must be public or referenced with an image pull Secret. `targetRevision: HEAD` follows the branch head, and automated pruning can delete resources removed from Git.
 
-### Troubleshooting
+## Troubleshooting
 
 ```bash
 kubectl get application shop-stack-dev -n argocd -o yaml
