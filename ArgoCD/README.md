@@ -1,3 +1,32 @@
+- [ArgoCD GitOps Repository - Shop Application](#argocd-gitops-repository---shop-application)
+  - [Folder Structure](#folder-structure)
+  - [System Architecture](#system-architecture)
+  - [What Is in the Manifests](#what-is-in-the-manifests)
+- [Labs](#labs)
+  - [Initinal Config and App Management](#initinal-config-and-app-management)
+    - [1: Install ArgoCD](#1-install-argocd)
+    - [2: Build and publish the backend image](#2-build-and-publish-the-backend-image)
+    - [3: Apply and inspect the ArgoCD Application](#3-apply-and-inspect-the-argocd-application)
+    - [4: Test the API locally](#4-test-the-api-locally)
+    - [5: Log in to the ArgoCD Web UI](#5-log-in-to-the-argocd-web-ui)
+  - [Automation and Hooks](#automation-and-hooks)
+    - [6: Simulate drift and confirm self-healing](#6-simulate-drift-and-confirm-self-healing)
+    - [7: Practice prune behavior](#7-practice-prune-behavior)
+    - [8: Practice ArgoCD PreSync Hooks (Database Migration Job)](#8-practice-argocd-presync-hooks-database-migration-job)
+  - [IAM](#iam)
+    - [9: Create developer user and RBAC permissions](#9-create-developer-user-and-rbac-permissions)
+    - [10: Test Unauthorized Actions \& Policy Enforcement](#10-test-unauthorized-actions--policy-enforcement)
+    - [11: Inspect Audit Logs and Security Events](#11-inspect-audit-logs-and-security-events)
+  - [Monitoring \& Troubleshooting](#monitoring--troubleshooting)
+    - [Prerequisites: Quick Prometheus \& Grafana Setup (Docker Desktop)](#prerequisites-quick-prometheus--grafana-setup-docker-desktop)
+    - [12: Trigger an Deployment Failure via Git](#12-trigger-an-deployment-failure-via-git)
+    - [13: Diagnose the Root Cause](#13-diagnose-the-root-cause)
+    - [14: Repair and Verify Service Recovery](#14-repair-and-verify-service-recovery)
+  - [Misc](#misc)
+    - [Use Cases](#use-cases)
+    - [Limitations](#limitations)
+    - [Troubleshooting](#troubleshooting)
+
 # ArgoCD GitOps Repository - Shop Application
 
 This folder contains Kubernetes manifests and a Java Spring Boot backend for a shop application. PostgreSQL stores the product catalogue, while Redis stores shopping carts.
@@ -44,6 +73,8 @@ This diagram maps the `app`, `base`, `environments`, and `root-application.yaml`
 - `environments/dev/kustomization.yaml` uses the public GHCR image and two backend replicas.
 - `environments/prod/kustomization.yaml` defines the production overlay with three replicas.
 - `app/` contains the Spring Boot products API backed by PostgreSQL and carts API backed by Redis.
+
+# Labs
 
 ## Initinal Config and App Management
 
@@ -275,7 +306,7 @@ Expected result: ArgoCD first creates and waits for db-migration-job to complete
 
 ## IAM
 
-### 8: Create developer user and RBAC permissions
+### 9: Create developer user and RBAC permissions
 
 In enterprise cloud environments (AWS EKS or Azure AKS), ArgoCD integrates directly with IAM (via AWS IAM Identity Center) or Entra ID (Azure AD) using OpenID Connect (OIDC). On Docker Desktop, we simulate this workflow using ArgoCD's built-in RBAC engine with local users or mock Dex OIDC tokens.
 
