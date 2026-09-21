@@ -6,13 +6,19 @@ namespace: shop-dev
 resources:
   - ../../base
 
-# Obraz aplikacji opublikowany w GitHub Container Registry
+# Proper image located in GitHub Container Registry
 images:
   - name: shop-backend
     newName: ghcr.io/pchmielecki87/shop-backend
     newTag: dev
 
-# Zwiększenie liczby replik na środowisku DEV
+# # Lab 12: Update fake wiremock image
+# images:
+#   - name: wiremock/wiremock
+#     newName: wiremock/wiremock
+#     newTag: dev-does-not-exist
+
+# Increase number of replicas in DEV environment
 patches:
   - target:
       kind: Deployment

@@ -444,7 +444,6 @@ Perform a structured root-cause analysis by inspecting ArgoCD, the Deployment st
 Inspect the overall application health in ArgoCD:
 
 ```bash
-argocd app get shop-stack-dev
 kubectl describe application shop-stack-dev -n argocd
 ```
 
@@ -457,6 +456,13 @@ kubectl get pods -n shop-dev
 ```
 
 Expected result: The rollout exceeds the timeout threshold, and the new Pod shows an ImagePullBackOff or ErrImagePull status.
+
+Stream application container logs to verify if the process fails at startup or fails to pull:
+
+```bash
+kubectl logs -l app=shop-backend -n shop-dev --all-containers --tail=50
+```
+
 Inspect Kubernetes events to confirm the exact failure reason:
 
 ```bash
@@ -464,7 +470,24 @@ kubectl describe pod -l app=shop-backend -n shop-dev
 kubectl get events -n shop-dev --sort-by='.lastTimestamp'
 ```
 
-Expected result: Confirm a Failed / PullImage event stating that the image tag wiremock/wiremock:dev-does-not-exist was not found in the registry.
+Inspect node-level system journal / container daemon logs (simulated on Docker Desktop node via kubectl node-shell or debug pod):
+
+```bash
+NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+kubectl debug node/$NODE_NAME -n default --image=alpine --profile=sysadmin -it -- chroot /host journalctl -u containerd -n 50
+
+# 2. Read logs from created pod
+kubectl logs pod/node-debugger-desktop-control-plane-<number> -n default
+
+# 3. Cleanup after debugging
+kubectl get pods -n default | node-debugger
+kubectl delete pod node-debugger-<xyz> -n default
+```
+
+Expected result:
+
+- kubectl events confirms a Failed / PullImage event stating that the image tag wiremock/wiremock:dev-does-not-exist was not found.
+- journalctl / node logs confirm container pull failures at the runtime layer (containerd).
 
 ### 14: Repair and Verify Service Recovery
 
@@ -479,25 +502,11 @@ git push origin main
 Wait for ArgoCD to detect the fix and complete the rollout:
 
 ```bash
-argocd app wait shop-stack-dev --sync --health --timeout 300
 kubectl rollout status deploy/shop-backend -n shop-dev
 ```
 
 Expected result: ArgoCD status returns to Synced and Healthy, with the rollout successfully completed.
-Verify service health and pod status:
-
-```bash
-kubectl get pods -n shop-dev
-kubectl port-forward svc/shop-backend-service 8080:8080 -n shop-dev
-```
-
-Test the endpoint in a second terminal:
-
-```bash
-curl http://localhost:8080/\_\_admin/
-```
-
-Expected result: All Pods display 1/1 Running / Ready, and the backend REST service responds with HTTP 200.
+Verify service health in ArgoCD UI portal. Expected result: All Pods display 1/1 Running.
 
 ## Misc
 
