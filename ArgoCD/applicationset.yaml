@@ -7,8 +7,8 @@ spec:
   generators:
     - list:
         elements:
-          # - env: dev
-          #   ns: shop-stack-dev
+          - env: dev
+            ns: shop-stack-dev
           - env: test
             ns: shop-stack-test
           - env: prod
