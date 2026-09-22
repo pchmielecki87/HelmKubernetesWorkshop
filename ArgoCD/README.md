@@ -26,6 +26,16 @@
     - [12: Trigger an Deployment Failure via Git](#12-trigger-an-deployment-failure-via-git)
     - [13: Diagnose the Root Cause](#13-diagnose-the-root-cause)
     - [14: Repair and Verify Service Recovery](#14-repair-and-verify-service-recovery)
+  - [Multi-Environment Deployments with Kustomize \& ApplicationSets](#multi-environment-deployments-with-kustomize--applicationsets)
+    - [Step 15: Create the Test Environment Overlay](#step-15-create-the-test-environment-overlay)
+    - [16: Automate Environment Provisioning with ApplicationSet](#16-automate-environment-provisioning-with-applicationset)
+    - [17: Validate Multi-Env Health \& Enforce AppProject Boundaries](#17-validate-multi-env-health--enforce-appproject-boundaries)
+  - [Section: CI/CD Pipeline \& Automated Promotion (GitLab CI)](#section-cicd-pipeline--automated-promotion-gitlab-ci)
+    - [18: Configure Immutable Image Build \& Promotion Pipeline](#18-configure-immutable-image-build--promotion-pipeline)
+    - [19: Execute Pipeline \& Track Promotion to Test](#19-execute-pipeline--track-promotion-to-test)
+    - [20: Deploy Test Application to Azure Container Apps](#20-deploy-test-application-to-azure-container-apps)
+  - [Ryzyka?](#ryzyka)
+    - [21](#21)
 - [Misc](#misc)
   - [Use Cases](#use-cases)
   - [Limitations](#limitations)
@@ -103,7 +113,7 @@ docker push ghcr.io/pchmielecki87/shop-backend:dev
 
 The GHCR package must be public, or the cluster must have an image pull Secret.
 
-To verify if image is in place navigate to [https://github.com/pchmielecki87?tab=packages](https://github.com/pchmielecki87?tab=packages) or use CLI command:
+To verify if image is in place navigate to https://github.com/pchmielecki87?tab=packages or use CLI command:
 
 ```bash
 docker buildx imagetools inspect ghcr.io/pchmielecki87/shop-backend:dev
@@ -543,6 +553,267 @@ kubectl rollout status deploy/shop-backend -n shop-dev
 
 Expected result: ArgoCD status returns to Synced and Healthy, with the rollout successfully completed.
 Verify service health in ArgoCD UI portal. Expected result: All Pods display 1/1 Running.
+
+## Multi-Environment Deployments with Kustomize & ApplicationSets
+
+### Step 15: Create the Test Environment Overlay
+
+Extend the existing baseline manifest set by creating a lightweight environment overlay for `test` without duplicating base definitions.
+
+Create the `test` overlay directory and copy the base `kustomization.yaml` structure:
+
+```bash
+mkdir -p environments/test
+cp environments/dev/kustomization.yaml environments/test/
+```
+
+Configure the test overlay parameters:
+- Update environments/test/kustomization.yaml to target the shop-test namespace.
+- Apply environmental overrides (such as adjusting replica counts or resource limits) while referencing the shared base manifests.
+
+Validate the Kustomize rendering and test cluster dry-run locally:
+
+```bash
+kubectl kustomize environments/test > /tmp/test.yaml
+kubectl apply --dry-run=client -f /tmp/test.yaml
+kubectl apply --dry-run=server -f /tmp/test.yaml
+```
+
+Expected result:
+- The generated manifest bundle in /tmp/test.yaml renders without errors.
+- (Client) All resources explicitly target the shop-test namespace while preserving base configuration logic.
+- (Server) `Error from server (NotFound): error when creating "/tmp/test.yaml": namespaces "shop-test" not found`.
+
+NOTE: Eventually we can create namespace manually:
+
+```bash
+kubectl create namespace shop-test
+kubectl apply --dry-run=server -f /tmp/test.yaml
+```
+
+but ArgoCD can do it for us:
+
+```yaml
+syncPolicy:
+  automated:
+    prune: true
+    selfHeal: true
+  syncOptions:
+    - CreateNamespace=true
+```
+
+### 16: Automate Environment Provisioning with ApplicationSet
+
+Use an ArgoCD ApplicationSet controller with a list generator to dynamically generate and manage Application resources across dev and test environments.
+
+Create or update applicationset.yaml using a list generator to define environment mappings:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: shop-stack
+  namespace: argocd
+spec:
+  generators:
+  - list:
+      elements:
+      - env: dev
+        ns: shop-dev
+      - env: test
+        ns: shop-test
+  template:
+    metadata:
+      name: shop-{{env}}
+    spec:
+      project: default
+      source:
+        repoURL: 'https://github.com/YOUR_USERNAME/YOUR_REPO.git'
+        targetRevision: HEAD
+        path: ArgoCD/environments/{{env}}
+      destination:
+        server: 'https://kubernetes.default.svc'
+        namespace: '{{ns}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+```
+
+NOTE: COMMENT ALL IN ROOT-APPLICATION.
+
+Apply the ApplicationSet manifest to the cluster:
+
+```bash
+kubectl apply -f applicationset.yaml
+```
+
+In case of failure `no matches for kind "ApplicationSet" in version "argoproj.io/v1alpha1"
+ensure CRDs are installed` install the Custom Resource Definition (CRD):
+
+```bash
+kubectl create -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/crds/applicationset-crd.yaml
+```
+
+and re-run `kubectl apply -f applicationset.yaml`.
+
+Verify that the generator created individual Application resources for both environments:
+
+```bash
+kubectl get applications -n argocd
+```
+
+Expected result: The ApplicationSet controller generates two distinct Application objects (shop-dev and shop-test) pointing to their respective paths and target namespaces.
+
+NOTE: if there is a problem with login to ArgoCD UI get once more the password:
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
+```
+
+NOTE 2: If in ArgoCD app seems stuck in sync process:
+
+```bash
+kubectl patch app shop-stack-prod -n argocd --type json -p='[{"op": "remove", "path": "/status/operationState"}]'
+```
+
+### 17: Validate Multi-Env Health & Enforce AppProject Boundaries
+
+Verify application deployment status across environments and validate that ArgoCD AppProject guardrails block deployments to unauthorized namespaces.
+Inspect application mapping and parameter propagation:
+
+```bash
+kubectl get applications -n argocd \
+  -o custom-columns=NAME:.metadata.name,PATH:.spec.source.path,NS:.spec.destination.namespace
+```
+
+Expected result: Output displays shop-dev targeting ArgoCD/environments/dev -> shop-dev, and shop-test targeting ArgoCD/environments/test -> shop-test.
+
+Confirm synchronization and health status for all generated environments in ArgoCD UI.
+
+## Section: CI/CD Pipeline & Automated Promotion (GitLab CI)
+
+### 18: Configure Immutable Image Build & Promotion Pipeline
+
+Define a GitLab CI pipeline that builds an immutable container image tagged with the commit SHA, pushes it to GitLab Container Registry, and promotes the change specifically for the test environment overlay.
+Set up required CI/CD variables in GitLab (Settings -> CI/CD -> Variables):
+- GITOPS_URL: Target GitOps repository HTTPS clone URL.
+- GITOPS_TOKEN: Personal Access Token with repository write permissions (write_repository).
+Mark variables as Masked and Protected.
+
+Create the .gitlab-ci.yml pipeline configuration targeting the test environment:
+
+```yaml
+stages:
+  - build
+  - promote
+
+variables:
+  TAG: $CI_COMMIT_SHORT_SHA
+  IMAGE: $CI_REGISTRY_IMAGE:$TAG
+  GITOPS_FILE: ArgoCD/environments/test/kustomization.yaml
+
+build:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $IMAGE .
+    - docker push $IMAGE
+
+promote:
+  stage: promote
+  image: alpine/git:latest
+  needs:
+    - build
+  script:
+    - git config --global user.name "GitLab CI Bot"
+    - git config --global user.email "ci-bot@example.com"
+    - git clone https://oauth2:${GITOPS_TOKEN}@${GITOPS_URL#https://} gitops-repo
+    - cd gitops-repo
+    - sed -i "s/newTag:.*/newTag:\ $TAG/" $GITOPS_FILE
+    - git add $GITOPS_FILE
+    - git commit -m "ci: promote test image tag $TAG"
+    - git push origin main
+```
+
+Expected result:
+The pipeline builds an immutable image tagged with $CI_COMMIT_SHORT_SHA and updates only the test environment manifest (ArgoCD/environments/test/kustomization.yaml).
+
+### 19: Execute Pipeline & Track Promotion to Test
+Trigger the automated pipeline by pushing a code change, monitor execution, and confirm that only the test overlay is updated.
+Commit and push pipeline files to the main branch:
+
+```bash
+git add .gitlab-ci.yml
+git commit -m "ci: add gitlab pipeline targeting test environment"
+git push origin main
+```
+
+Monitor pipeline status via CLI or GitLab Web UI:
+
+```bash
+glab ci status --live
+```
+
+Verify that the promotion updated the test overlay tag:
+
+```bash
+git -C ../gitops pull
+grep -A2 newTag ../gitops/ArgoCD/environments/test/kustomization.yaml
+```
+
+Expected result:
+- Both build and promote jobs finish successfully.
+- The newTag in ArgoCD/environments/test/kustomization.yaml matches the pipeline $CI_COMMIT_SHORT_SHA.
+
+### 20: Deploy Test Application to Azure Container Apps
+
+Deploy the promoted test container image directly from GitLab Container Registry into Azure Container Apps.
+Create Azure Resource Group and Container Apps Environment:
+
+```bash
+az group create --name rg-shop-test --location westeurope
+az containerapp env create --name cae-shop-test --resource-group rg-shop-test --location westeurope
+```
+
+Deploy the test environment Container App sourcing the image from GitLab Container Registry:
+
+```bash
+TAG=$(git rev-parse --short HEAD)
+
+az containerapp create \
+  --name ca-shop-test \
+  --resource-group rg-shop-test \
+  --environment cae-shop-test \
+  --image [registry.gitlab.com/YOUR_GITLAB_USER/YOUR_REPO:$TAG](https://registry.gitlab.com/YOUR_GITLAB_USER/YOUR_REPO:$TAG) \
+  --registry-server registry.gitlab.com \
+  --registry-username $CI_REGISTRY_USER \
+  --registry-password $GITOPS_TOKEN \
+  --target-port 8080 \
+  --ingress external
+```
+
+Verify the deployment and test the public application URL:
+
+```bash
+az containerapp show \
+  --name ca-shop-test \
+  --resource-group rg-shop-test \
+  --query properties.configuration.ingress.fqdn -o tsv
+```
+
+Expected result:
+- Azure Container Apps pulls the image tagged with $TAG directly from GitLab Container Registry.
+- The application responds over HTTP/HTTPS on the generated FQDN endpoint.
+
+## Ryzyka?
+
+### 21
 
 # Misc
 
