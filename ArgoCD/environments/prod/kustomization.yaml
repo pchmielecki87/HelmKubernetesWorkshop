@@ -8,8 +8,8 @@ resources:
 
 images:
   - name: shop-backend
-    newName: twój-dockerhub/shop-backend
-    newTag: v1.0.0
+    newName: ghcr.io/pchmielecki87/shop-backend
+    newTag: dev # temporary solution as we do have now only one image
 
 patches:
   - target:

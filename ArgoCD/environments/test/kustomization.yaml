@@ -10,7 +10,7 @@ resources:
 images:
   - name: shop-backend
     newName: ghcr.io/pchmielecki87/shop-backend
-    newTag: test
+    newTag: dev # temporary solution as we do have now only one image
 
 # Increase number of replicas in TEST environment
 patches:
