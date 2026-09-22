@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: shop-stack
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          # - env: dev
+          #   ns: shop-stack-dev
+          - env: test
+            ns: shop-stack-test
+          - env: prod
+            ns: shop-stack-prod
+  template:
+    metadata:
+      name: shop-stack-{{env}}
+    spec:
+      project: default
+      source:
+        repoURL: "https://github.com/pchmielecki87/HelmKubernetesWorkshop.git"
+        targetRevision: main
+        path: ArgoCD/environments/{{env}}
+      destination:
+        server: "https://kubernetes.default.svc"
+        namespace: "{{ns}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
